@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="e8b25f9c-8720-49ce-8f47-7ee72ae466c8" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="123456" database="studentdetails" />
+	</db:config>
+	<flow name="assignment-1Flow" doc:id="76d71e5e-4036-4659-b819-24a6be84bf54" >
+		<ee:transform doc:name="Transform Message" doc:id="1788612c-e9f9-4f2f-a51a-fabd8614ff17" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	userId1: vars.userId1 joinBy " ",
+	userId2: vars.userId2 joinBy " ",
+	userId3: vars.userId3 joinBy " "
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:select doc:id="4a341603-11f1-413f-bafc-a207bfd5c1c0" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from details where USERID in (:userid1,:userid2,:userid3)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	userid1: payload.userId1,
+	userid2: payload.userId2,
+	userid3: payload.userId3
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="d736fa3c-0554-40fa-85d1-65ce1710ef4a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<validation:is-not-empty-collection doc:id="a8a90e81-f428-4af8-b7e3-b124dc197193" doc:name="Is not empty collection" >
+			<error-mapping targetType="WRONG:USERID" />
+		</validation:is-not-empty-collection>
+		<ee:transform doc:name="Transform Message" doc:id="552e5054-6af8-4b29-baf4-47b8b2035b3b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map{
+	message : "select userid," ++ $.COLUMNNAMES ++ " FROM " ++ $.TABLENAMES ++ " WHERE USERID = '" ++ $.USERID ++ "'"
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="38da41c4-3c8b-45b7-9044-ccb12fa19e7a" >
+			<db:select doc:id="eaf031f6-d003-419f-948e-a0c803d4e8ce" config-ref="Database_Config" doc:name="Select" >
+				<db:sql ><![CDATA[#[payload.message]]]></db:sql>
+			</db:select>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="e6d8cd5e-a3dc-4610-941f-3a254ffcd865" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="775bf62f-8dcf-433b-b2b8-7ba19160b66d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+(((flatten(payload)) groupBy $.userid
+mapObject(value,key,index) ->{
+    (key):value reduce($$ ++ $)
+})orderBy $.userid) groupBy $.DEPTID
+
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="e8a0411c-75e3-4d99-a871-c98458193bca" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+{
+	"output": payload
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Copy_of_On Error Propagate" doc:id="31b5426f-4fb5-456b-a627-73ac78a0d921" type="DB:CONNECTIVITY" >
+				<ee:transform doc:name="Copy_of_Transform Message" doc:id="0d167673-0b27-43ef-b9e9-dde6c346432c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json 
+---
+{
+	 "error": "error in DB",
+
+   "message": "Incorrect username and password",
+
+   "detail": error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Copy_of_On Error Propagate" doc:id="4f8caa9b-479c-4ffc-b613-0de5842a29e4" type="WRONG:USERID" >
+				<ee:transform doc:name="Copy_of_Transform Message" doc:id="adc6f4cd-9ccb-4733-bbc8-239032a1a4dd" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"error": "wrong userID",
+
+   "message": ["No records available Hence cannot proceed with the execution"] + vars.a,
+
+   "detail": "Please give userId1=UID1303,userId2=UID1205,userId3=UID1766"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_76d71e5e_4036_4659_b819_24a6be84bf54_Input_Variables_userId2 = Array<String>
+
